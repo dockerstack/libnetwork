@@ -52,6 +52,12 @@ func (cli *NetworkCli) getMethod(args ...string) (func(string, ...string) error,
 // network UI commands are designed to be invoked from multiple parent chains
 func (cli *NetworkCli) Cmd(chain string, args ...string) error {
 	var errStr string
+	if len(args) > 2 {
+		method, exists := cli.getMethod(args[:3]...)
+		if exists {
+			return method(chain, args[3:]...)
+		}
+	}
 	if len(args) > 1 {
 		method, exists := cli.getMethod(args[:2]...)
 		if exists {
