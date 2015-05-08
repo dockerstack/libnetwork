@@ -48,7 +48,9 @@ package libnetwork
 import (
 	"sync"
 
+	log "github.com/Sirupsen/logrus"
 	"github.com/docker/docker/pkg/stringid"
+	"github.com/docker/libnetwork/datastore"
 	"github.com/docker/libnetwork/driverapi"
 	"github.com/docker/libnetwork/sandbox"
 	"github.com/docker/libnetwork/types"
@@ -94,6 +96,7 @@ type controller struct {
 	networks  networkTable
 	drivers   driverTable
 	sandboxes sandboxTable
+	store     datastore.DataStore
 	sync.Mutex
 }
 
@@ -101,6 +104,17 @@ type controller struct {
 func New() NetworkController {
 	c := &controller{networks: networkTable{}, sandboxes: sandboxTable{}}
 	c.drivers = enumerateDrivers(c)
+	/* TODO : Duh ! make this configurable :-) */
+	config := &datastore.StoreConfiguration{}
+	config.Provider = "consul"
+	config.Addrs = []string{"localhost:8500"}
+
+	store, err := datastore.NewDataStore(config)
+	if err != nil {
+		log.Error("Failed to connect with Consul server")
+	}
+	c.store = store
+
 	return c
 
 }
@@ -167,6 +181,7 @@ func (c *controller) NewNetwork(networkType, name string, options ...NetworkOpti
 	// Store the network handler in controller
 	c.Lock()
 	c.networks[network.id] = network
+	c.store.PutObjectAtomic(network)
 	c.Unlock()
 
 	return network, nil
