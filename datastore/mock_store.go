@@ -65,7 +65,7 @@ func (s *MockStore) Exists(key string) (bool, error) {
 }
 
 // GetRange gets a range of values at "directory"
-func (s *MockStore) GetRange(prefix string) (values [][]byte, err error) {
+func (s *MockStore) GetRange(prefix string) (values []store.KVEntry, err error) {
 	return nil, ErrNotImplmented
 }
 
