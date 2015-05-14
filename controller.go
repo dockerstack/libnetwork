@@ -3,7 +3,7 @@ Package libnetwork provides the basic functionality and extension points to
 create network namespaces and allocate interfaces for containers to use.
 
         // Create a new controller instance
-        controller, _err := libnetwork.New()
+        controller, _err := libnetwork.New("/etc/default/libnetwork.toml")
 
         // Select and configure the network driver
         networkType := "bridge"
@@ -47,21 +47,19 @@ package libnetwork
 
 import (
 	"encoding/json"
-	"errors"
-	"fmt"
+	"os"
+	"strings"
 	"sync"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/docker/docker/pkg/stringid"
+	"github.com/docker/libnetwork/config"
 	"github.com/docker/libnetwork/datastore"
 	"github.com/docker/libnetwork/driverapi"
 	"github.com/docker/libnetwork/sandbox"
 	"github.com/docker/libnetwork/types"
 	"github.com/docker/swarm/pkg/store"
 )
-
-// TODO: Move it to error.go once the error refactoring is done
-var ErrInvalidDatastore = errors.New("Datastore is not initialized")
 
 // NetworkController provides the interface for controller instance which manages
 // networks.
@@ -103,12 +101,13 @@ type controller struct {
 	networks  networkTable
 	drivers   driverTable
 	sandboxes sandboxTable
+	cfg       *config.Config
 	store     datastore.DataStore
 	sync.Mutex
 }
 
 // New creates a new instance of network controller.
-func New() (NetworkController, error) {
+func New(configFile string) (NetworkController, error) {
 	c := &controller{
 		networks:  networkTable{},
 		sandboxes: sandboxTable{},
@@ -116,20 +115,45 @@ func New() (NetworkController, error) {
 	if err := initDrivers(c); err != nil {
 		return nil, err
 	}
-	if err := c.initDataStore(); err != nil {
-		log.Errorf("Failed to Initialize Datastore : %v", err)
-		// TODO : Should we fail if the initDataStore fail here ?
+	if err := c.initConfig(configFile); err == nil {
+		if err := c.initDataStore(); err != nil {
+			// Failing to initalize datastore is a bad situation to be in.
+			// But it cannot fail creating the Controller
+			log.Warnf("Failed to Initialize Datastore : %v", err)
+		}
+	} else {
+		// Missing Configuration file is not a failure scenario
+		// But without that, datastore cannot be initialized.
+		log.Debugf("Unable to Parse LibNetwork Config file : %v", err)
 	}
 	return c, nil
 }
 
-func (c *controller) initDataStore() error {
-	/* TODO : Duh ! make this configurable */
-	config := &datastore.StoreConfiguration{}
-	config.Provider = "consul"
-	config.Addrs = []string{"localhost:8500"}
+const (
+	cfgFileEnv     = "LIBNETWORK_CFG"
+	defaultCfgFile = "/etc/default/libnetwork.toml"
+)
 
-	store, err := datastore.NewDataStore(config)
+func (c *controller) initConfig(configFile string) error {
+	cfgFile := configFile
+	if strings.Trim(cfgFile, " ") == "" {
+		cfgFile = os.Getenv(cfgFileEnv)
+		if strings.Trim(cfgFile, " ") == "" {
+			cfgFile = defaultCfgFile
+		}
+	}
+	cfg, err := config.ParseConfig(cfgFile)
+	if err != nil {
+		return ErrInvalidConfigFile(cfgFile)
+	}
+	c.Lock()
+	c.cfg = cfg
+	c.Unlock()
+	return nil
+}
+
+func (c *controller) initDataStore() error {
+	store, err := datastore.NewDataStore(&c.cfg.Datastore)
 	if err != nil {
 		return err
 	}
@@ -218,13 +242,13 @@ func (c *controller) newNetworkFromStore(n *network) {
 }
 
 func (c *controller) addNetworkToStore(n *network) error {
-	if IsReservedNetwork(n.Name()) {
+	if isReservedNetwork(n.Name()) {
 		return nil
 	}
 	if c.store == nil {
 		return ErrInvalidDatastore
 	}
-	return c.store.PutObjectAtomic(network)
+	return c.store.PutObjectAtomic(n)
 }
 
 func (c *controller) watchNewNetworks() {
@@ -244,7 +268,6 @@ func (c *controller) watchNewNetworks() {
 				// Skip any watch notification for a network that has not changed
 				continue
 			}
-			fmt.Printf("WATCHED : %v = %v\n", kvi[i].Key(), n)
 			c.newNetworkFromStore(&n)
 		}
 	})

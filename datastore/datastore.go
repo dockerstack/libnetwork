@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/docker/libnetwork/config"
 	"github.com/docker/swarm/pkg/store"
 )
 
@@ -21,14 +22,7 @@ type DataStore interface {
 }
 
 type datastore struct {
-	store  store.Store
-	config *StoreConfiguration
-}
-
-//StoreConfiguration exported
-type StoreConfiguration struct {
-	Addrs    []string
-	Provider string
+	store store.Store
 }
 
 //KV Key Value interface used by objects to be part of the DataStore
@@ -51,8 +45,8 @@ var errNewDatastore = errors.New("Error creating new Datastore")
 var errInvalidConfiguration = errors.New("Invalid Configuration passed to Datastore")
 
 // newClient used to connect to KV Store
-func newClient(kv string, addrs []string) (DataStore, error) {
-	store, err := store.CreateStore(kv, addrs, store.Config{})
+func newClient(kv string, addrs string) (DataStore, error) {
+	store, err := store.CreateStore(kv, []string{addrs}, store.Config{})
 	if err != nil {
 		return nil, err
 	}
@@ -61,11 +55,17 @@ func newClient(kv string, addrs []string) (DataStore, error) {
 }
 
 // NewDataStore creates a new instance of LibKV data store
-func NewDataStore(config *StoreConfiguration) (DataStore, error) {
-	if config == nil {
+func NewDataStore(cfg *config.DatastoreCfg) (DataStore, error) {
+	if cfg == nil {
 		return nil, errInvalidConfiguration
 	}
-	return newClient(config.Provider, config.Addrs)
+	// if cfg.Embedded
+	return newClient(cfg.Client.Provider, cfg.Client.Address)
+}
+
+// NewCustomDataStore can be used by clients to plugin cusom datatore that adhers to store.Store
+func NewCustomDataStore(customStore store.Store) DataStore {
+	return &datastore{store: customStore}
 }
 
 func (ds *datastore) KVStore() store.Store {

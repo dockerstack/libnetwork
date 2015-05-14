@@ -12,6 +12,8 @@ var (
 	// ErrInvalidNetworkDriver is returned if an invalid driver
 	// instance is passed.
 	ErrInvalidNetworkDriver = errors.New("invalid driver bound to network")
+	// ErrInvalidDatastore is returned if the datastore is not configured properly
+	ErrInvalidDatastore = errors.New("Datastore is not initialized")
 	// ErrInvalidJoin is returned if a join is attempted on an endpoint
 	// which already has a container joined.
 	ErrInvalidJoin = errors.New("a container has already joined the endpoint")
@@ -25,6 +27,13 @@ var (
 	// invoked with an empty name parameter
 	ErrInvalidName = errors.New("invalid Name")
 )
+
+// ErrInvalidConfigFile type is returned when an invalid LibNetwork config file is detected
+type ErrInvalidConfigFile string
+
+func (cf ErrInvalidConfigFile) Error() string {
+	return fmt.Sprintf("Invalid Config file %q", string(cf))
+}
 
 // NetworkTypeError type is returned when the network type string is not
 // known to libnetwork.

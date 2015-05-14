@@ -25,7 +25,8 @@ type MockStore struct {
 	db map[string]*MockData
 }
 
-func newMockStore() *MockStore {
+// NewMockStore creates a Map backed Datastore that is useful for mocking
+func NewMockStore() *MockStore {
 	db := make(map[string]*MockData)
 	return &MockStore{db}
 }
