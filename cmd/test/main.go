@@ -9,6 +9,10 @@ import (
 
 	"github.com/docker/libnetwork"
 	"github.com/docker/libnetwork/pkg/options"
+	_ "github.com/docker/swarm/discovery/file"
+	_ "github.com/docker/swarm/discovery/kv"
+	_ "github.com/docker/swarm/discovery/nodes"
+	_ "github.com/docker/swarm/discovery/token"
 )
 
 func main() {

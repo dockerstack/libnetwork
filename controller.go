@@ -58,6 +58,7 @@ import (
 	"github.com/docker/libnetwork/driverapi"
 	"github.com/docker/libnetwork/sandbox"
 	"github.com/docker/libnetwork/types"
+	"github.com/docker/swarm/discovery"
 	"github.com/docker/swarm/pkg/store"
 )
 
@@ -121,6 +122,11 @@ func New(configFile string) (NetworkController, error) {
 			// But it cannot fail creating the Controller
 			log.Warnf("Failed to Initialize Datastore : %v", err)
 		}
+		if err := c.initDiscovery(); err != nil {
+			// Failing to initalize discovery is a bad situation to be in.
+			// But it cannot fail creating the Controller
+			log.Warnf("Failed to Initialize Discovery : %v", err)
+		}
 	} else {
 		// Missing Configuration file is not a failure scenario
 		// But without that, datastore cannot be initialized.
@@ -160,6 +166,17 @@ func (c *controller) initDataStore() error {
 	c.store = store
 	go c.watchNewNetworks()
 	return nil
+}
+
+func (c *controller) initDiscovery() error {
+	hostDiscovery := NewHostDiscovery()
+	return hostDiscovery.StartDiscovery(&c.cfg.Cluster, c.hostJoinCallback, c.hostLeaveCallback)
+}
+
+func (c *controller) hostJoinCallback(entries []*discovery.Entry) {
+}
+
+func (c *controller) hostLeaveCallback(entries []*discovery.Entry) {
 }
 
 func (c *controller) ConfigureNetworkDriver(networkType string, options map[string]interface{}) error {
