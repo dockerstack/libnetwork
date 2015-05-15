@@ -18,6 +18,7 @@ type DaemonCfg struct {
 type ClusterCfg struct {
 	Discovery string
 	Address   string
+	Heartbeat uint64
 }
 
 // DatastoreCfg represents Datastore configuration.

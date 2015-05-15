@@ -47,6 +47,7 @@ package libnetwork
 
 import (
 	"encoding/json"
+	"net"
 	"os"
 	"strings"
 	"sync"
@@ -57,6 +58,7 @@ import (
 	"github.com/docker/libnetwork/config"
 	"github.com/docker/libnetwork/datastore"
 	"github.com/docker/libnetwork/driverapi"
+	"github.com/docker/libnetwork/hostdiscovery"
 	"github.com/docker/libnetwork/sandbox"
 	"github.com/docker/libnetwork/types"
 	"github.com/docker/swarm/pkg/store"
@@ -123,6 +125,11 @@ func New(configFile string) (NetworkController, error) {
 			// But it cannot fail creating the Controller
 			log.Warnf("Failed to Initialize Datastore : %v", err)
 		}
+		if err := c.initDiscovery(); err != nil {
+			// Failing to initalize discovery is a bad situation to be in.
+			// But it cannot fail creating the Controller
+			log.Warnf("Failed to Initialize Discovery : %v", err)
+		}
 	} else {
 		// Missing Configuration file is not a failure scenario
 		// But without that, datastore cannot be initialized.
@@ -164,6 +171,17 @@ func (c *controller) initDataStore() error {
 	go c.watchNewNetworks()
 
 	return nil
+}
+
+func (c *controller) initDiscovery() error {
+	hostDiscovery := hostdiscovery.NewHostDiscovery()
+	return hostDiscovery.StartDiscovery(&c.cfg.Cluster, c.hostJoinCallback, c.hostLeaveCallback)
+}
+
+func (c *controller) hostJoinCallback(hosts []net.IP) {
+}
+
+func (c *controller) hostLeaveCallback(hosts []net.IP) {
 }
 
 func (c *controller) ConfigureNetworkDriver(networkType string, options map[string]interface{}) error {
@@ -225,7 +243,7 @@ func (c *controller) NewNetwork(networkType, name string, options ...NetworkOpti
 
 	network.processOptions(options...)
 	if err := c.addNetworkToStore(network); err != nil {
-		return nil, err
+		log.Debugf("Failed to add network into datastore %v", err)
 	}
 	// Create the network
 	if err := d.CreateNetwork(network.id, network.generic); err != nil {
